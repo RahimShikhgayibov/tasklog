@@ -57,7 +57,7 @@ builder.Services
     {
         o.Cookie.Name = "tasklog.auth";
         o.Cookie.HttpOnly = true;
-        o.Cookie.SameSite = SameSiteMode.Strict;
+        o.Cookie.SameSite = Microsoft.AspNetCore.Http.SameSiteMode.Strict;
         o.ExpireTimeSpan = TimeSpan.FromDays(30);
         o.SlidingExpiration = true;
 
