@@ -12,7 +12,7 @@ RUN npm run build
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS api
 WORKDIR /src
 COPY backend/Tasklog.Api/Tasklog.Api.csproj backend/Tasklog.Api/
-RUN dotnet restore backend/Tasklog.Api/Tasklog.Api.csproj -r linux-x64
+RUN dotnet restore backend/Tasklog.Api/Tasklog.Api.csproj -r linux-x64 -p:PublishReadyToRun=true
 COPY backend/Tasklog.Api/ backend/Tasklog.Api/
 RUN dotnet publish backend/Tasklog.Api/Tasklog.Api.csproj \
       -c Release -r linux-x64 --self-contained false --no-restore \
