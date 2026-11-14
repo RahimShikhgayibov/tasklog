@@ -1,42 +1,62 @@
 # Tasklog
 
-Şəxsi to-do app: prioritet və son tarix, kateqoriya və teqlər, alt tapşırıqlar,
-təkrarlanan tapşırıqlar, **avtomatik dəyişiklik tarixçəsi**, gündəlik jurnal və statistika.
+Şəxsi to-do app. Funksiyalar:
+
+- prioritet və son tarix, kateqoriya və teqlər;
+- alt tapşırıqlar və təkrarlanan tapşırıqlar;
+- **avtomatik dəyişiklik tarixçəsi**;
+- gündəlik jurnal və statistika.
+
+Bir şifrə ilə qorunur, istənilən cihazdan brauzerdə açılır.
 
 | Hissə    | Texnologiya |
 |----------|-------------|
-| Backend  | ASP.NET Core (.NET 10) Minimal API, EF Core, SQLite |
+| Backend  | ASP.NET Core (.NET 10) Minimal API, EF Core, PostgreSQL |
 | Frontend | React 19 + TypeScript, Vite, TanStack Query, React Router |
+| Hosting  | Bir Docker container (API + React), Render (pulsuz) + Neon PostgreSQL (pulsuz) |
 
-## İşə salmaq (lokal)
+## Cloud-a deploy (pulsuz)
 
-Lazım olanlar: .NET 10 SDK, Node.js 20+, `dotnet-ef` aləti.
+Bu addımlar bir dəfə edilir. Sonra `main`-ə hər push avtomatik deploy olunur.
+
+1. **GitHub.** Kodu repo-ya push et. İlk push-da GitHub Actions EF Core migration-ı yaradıb repo-ya commit edir. CI yaşıl olana qədər gözlə.
+2. **Neon** ([neon.com](https://neon.com)): proyekt yarat, region **AWS Europe (Frankfurt)** olsun. Dashboard-da **Connect** düyməsini bas, **Connection pooling-i söndür** və connection string-i kopyala (`postgresql://…`).
+3. **Render** ([render.com](https://render.com)): **New → Blueprint** seç və bu repo-nu göstər. Render `render.yaml`-ı oxuyub iki dəyər soruşacaq:
+   - `ConnectionStrings__Default` — Neon-dan kopyaladığın connection string;
+   - `Auth__Password` — girişdə istifadə edəcəyin şifrə (ən azı 10 simvol).
+4. Deploy bitəndə Render `https://tasklog-xxxx.onrender.com` kimi bir link verəcək. Linki aç və şifrə ilə daxil ol.
+
+**Pulsuz planın şərtləri:**
+- Render 15 dəqiqə istifadə olunmayanda app-i yatırır. Yatandan sonra ilk açılış ~1 dəqiqə çəkir, sonra normal sürətlə işləyir. Data Neon-dadır, ona görə yatmaq heç nəyi itirmir.
+- Neon pulsuz planda 1 GB yer verir. Bu app üçün bu, uzun illər deməkdir.
+
+**Şifrəni dəyişmək:** Render → Environment bölməsində `Auth__Password`-u dəyiş. Bütün cihazlardakı köhnə girişlər avtomatik etibarsız olur.
+
+## Lokal inkişaf
+
+Lazım olanlar: .NET 10 SDK, Node.js 22+, Docker.
+
+```bash
+docker compose up -d db                 # PostgreSQL
+cd backend/Tasklog.Api && dotnet run    # http://localhost:5080, şifrə: dev
+cd frontend && npm install && npm run dev   # http://localhost:5173
+```
+
+Bütün app-i lokal olaraq bir container kimi işə salmaq üçün: `docker compose up --build`. Ünvan `http://localhost:8080`, şifrə `local-password`.
+
+**Testlər.** PostgreSQL lazımdır, ona görə əvvəlcə `docker compose up -d db` et:
+- `dotnet test` — backend: inteqrasiya testləri real app və real PostgreSQL ilə işləyir;
+- `cd frontend && npm test` — frontend.
+
+**Yeni migration.** Model dəyişəndə:
 
 ```bash
 dotnet tool install --global dotnet-ef   # bir dəfə
-```
-
-### 1. Backend
-
-```bash
 cd backend/Tasklog.Api
-dotnet ef migrations add InitialCreate   # yalnız ilk dəfə
-dotnet run                               # http://localhost:5080
+dotnet ef migrations add <Ad>
 ```
 
-- İlk işə salınmada `tasklog.db` (SQLite) yaradılır, migration-lar tətbiq olunur və 4 kateqoriya (İş, Təhsil, Şəxsi, Layihələr) əlavə edilir.
-- Development-də OpenAPI sənədi: `http://localhost:5080/openapi/v1.json`.
-- Kompüterində .NET 10 yoxdursa, `Tasklog.Api.csproj`-da `TargetFramework`-ü `net9.0` və ya `net8.0` et, paket versiyalarını da uyğun (`9.0.*` / `8.0.*`) dəyiş. .NET 8-də `Guid.CreateVersion7()` yoxdur, onu `Guid.NewGuid()` ilə əvəz et.
-
-### 2. Frontend
-
-```bash
-cd frontend
-npm install
-npm run dev      # http://localhost:5173  (/api → :5080 proxy)
-```
-
-Digər əmrlər: `npm test` (quick-add parser testləri), `npm run build`, `npm run typecheck`.
+CI model ilə migration-ların uyğun olub-olmadığını yoxlayır.
 
 ## Necə işləyir
 
@@ -48,9 +68,18 @@ Endpoint-lərin heç biri log yazmır. Log-u `Data/ActivityLogInterceptor.cs` ya
 2. Task və subtask dəyişikliklərini `ActivityEntry` sətirlərinə çevirir. Hər sətirdə hansı sahənin dəyişdiyi, köhnə və yeni dəyəri olur.
 3. Bu sətirlər həmin transaction-da yadda saxlanır.
 
-Beləliklə, kodun harasında tapşırıq dəyişsə də, tarixçə unudulmur. Log-un task-a foreign key-i yoxdur, ona görə də tapşırıq silinəndə tarixçəsi qalır.
+Log-un task-a foreign key-i yoxdur, ona görə də tapşırıq silinəndə tarixçəsi qalır.
 
 > `ExecuteUpdate` / `ExecuteDelete` change tracker-dən keçmir. Onları task və subtask üçün istifadə etmə, yoxsa həmin dəyişikliklər log-a düşməz.
+
+### Giriş
+
+Tək istifadəçi və bir şifrə var (`Auth__Password`):
+
+- Giriş HttpOnly, `SameSite=Strict` cookie ilə saxlanır. Cookie 30 gün etibarlıdır və hər istifadədə uzanır.
+- Cookie-ni şifrələyən açarlar (ASP.NET Data Protection) database-də saxlanır. Ona görə də app yatıb oyananda giriş itmir.
+- Login cəhdləri dəqiqədə 10-la məhdudlaşdırılıb.
+- Şifrə dəyişəndə köhnə cookie-lər rədd olunur.
 
 ### Vaxt zonaları
 
@@ -60,7 +89,7 @@ Beləliklə, kodun harasında tapşırıq dəyişsə də, tarixçə unudulmur. L
 
 ### Təkrarlanan tapşırıqlar
 
-Təkrarlanan tapşırığı tamamlayanda növbəti nüsxə yeni tapşırıq kimi yaradılır. Bütün nüsxələrin `SeriesId`-i eyni olur, vərdiş statistikası da buna əsasən hesablanır.
+Təkrarlanan tapşırığı tamamlayanda növbəti nüsxə yeni tapşırıq kimi yaradılır. Bütün nüsxələrin `SeriesId`-i eyni olur, vərdiş statistikası da buna əsasən hesablanır. Gecikmiş tapşırığı gec tamamlasan, növbəti nüsxə keçmiş tarixə yox, gələcəyə düşür.
 
 ### Sürətli əlavə
 
@@ -75,12 +104,13 @@ Sürətli əlavə sətrində bu işarələr tanınır:
 | `15:00` | saat |
 | `hər gün` / `iş günləri` / `hər həftə` / `hər ay` | təkrar |
 
-Parser: `frontend/src/lib/quickAdd.ts`, testləri yanındakı `quickAdd.test.ts` faylındadır.
-
 ## API qısaca
+
+`/api/auth/login` və `/health` istisna olmaqla hamısı giriş tələb edir.
 
 | Metod | Yol | Nə edir |
 |-------|-----|---------|
+| POST | `/api/auth/login`, `/api/auth/logout` · GET `/api/auth/me` | giriş |
 | GET | `/api/tasks?status=&categoryId=&tag=&priority=&search=&dueBefore=&dueAfter=&completedAfter=` | siyahı |
 | GET | `/api/tasks/counts?todayEnd=` | menyu sayğacları |
 | POST / PUT / DELETE | `/api/tasks`, `/api/tasks/{id}` | yarat / dəyiş / sil |
@@ -88,8 +118,7 @@ Parser: `frontend/src/lib/quickAdd.ts`, testləri yanındakı `quickAdd.test.ts`
 | POST / PATCH / DELETE | `/api/tasks/{id}/subtasks[/{subId}]` | alt tapşırıqlar |
 | GET / POST / PUT / DELETE | `/api/categories[/{id}]` | kateqoriyalar |
 | GET | `/api/activity?taskId=&action=&cursor=&limit=` | tarixçə (cursor pagination) |
-| GET | `/api/activity/summary?from=&to=` | gün xülasəsi |
-| GET | `/api/activity/export?from=&to=` | CSV |
+| GET | `/api/activity/summary?from=&to=` · `/api/activity/export` | gün xülasəsi · CSV |
 | GET / PUT | `/api/journal`, `/api/journal/{yyyy-MM-dd}` | gündəlik jurnal |
 | GET | `/api/stats?from=&to=` | statistika |
 
@@ -98,12 +127,14 @@ Parser: `frontend/src/lib/quickAdd.ts`, testləri yanındakı `quickAdd.test.ts`
 ```
 backend/Tasklog.Api/
   Domain/       entity-lər və enum-lar
-  Data/         AppDbContext, ActivityLogInterceptor
+  Data/         AppDbContext, ActivityLogInterceptor, connection string
   Common/       TimeZoneResolver, Validation
-  Features/     Tasks, Categories, Activity, Journal, Stats (hər biri öz endpoint-ləri ilə)
+  Features/     Auth, Tasks, Categories, Activity, Journal, Stats
+backend/Tasklog.Api.Tests/   inteqrasiya + unit testlər
 frontend/src/
   api/          fetch client, tiplər, React Query hook-ları
   lib/          tarix formatları, etiketlər, quick-add parser
   components/   Sidebar, TaskRow, TaskDetail, QuickAdd, ikonlar
-  pages/        TasksPage, LogPage, StatsPage
+  pages/        Login, Tasks, Log, Stats
+Dockerfile, render.yaml, docker-compose.yml, .github/workflows/ci.yml
 ```

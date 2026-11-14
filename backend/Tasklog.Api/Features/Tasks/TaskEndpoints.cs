@@ -72,9 +72,12 @@ public static class TaskEndpoints
 
         if (!string.IsNullOrWhiteSpace(search))
         {
-            var pattern = $"%{search.Trim()}%";
-            query = query.Where(t => EF.Functions.Like(t.Title, pattern) ||
-                                     (t.Description != null && EF.Functions.Like(t.Description, pattern)));
+            // ILIKE = case-insensitive in PostgreSQL. Escape the user's % and _
+            // so they are matched literally.
+            var escaped = search.Trim().Replace(@"\", @"\\").Replace("%", @"\%").Replace("_", @"\_");
+            var pattern = $"%{escaped}%";
+            query = query.Where(t => EF.Functions.ILike(t.Title, pattern, @"\") ||
+                                     (t.Description != null && EF.Functions.ILike(t.Description, pattern, @"\")));
         }
 
         if (dueBefore is { } before)

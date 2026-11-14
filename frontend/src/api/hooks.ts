@@ -5,6 +5,7 @@ import type { ActivityAction, CreateTaskInput, SaveJournalInput, UpdateTaskInput
 // Query keys. Any task change can affect lists, counts, history and stats,
 // so mutations invalidate all of them — simple and correct for a small app.
 export const keys = {
+  auth: ["auth"] as const,
   tasks: ["tasks"] as const,
   taskList: (q: TaskQuery) => ["tasks", "list", q] as const,
   counts: ["tasks", "counts"] as const,
@@ -24,6 +25,34 @@ function useInvalidateAll() {
       qc.invalidateQueries({ queryKey: keys.journal }),
       qc.invalidateQueries({ queryKey: keys.stats }),
     ]);
+}
+
+export const useAuth = () =>
+  useQuery({ queryKey: keys.auth, queryFn: api.auth.me, staleTime: Infinity, retry: 2 });
+
+export function useLogin() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (password: string) => api.auth.login(password),
+    onSuccess: () => {
+      qc.setQueryData(keys.auth, true);
+      // Anything that failed with 401 before the login loads again.
+      qc.invalidateQueries({ predicate: (q) => q.queryKey[0] !== keys.auth[0] });
+    },
+  });
+}
+
+export function useLogout() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: api.auth.logout,
+    onSettled: () => {
+      qc.setQueryData(keys.auth, false);
+      // Drop every cached task, log and journal entry (but keep the auth
+      // query itself: the app is subscribed to it).
+      qc.removeQueries({ predicate: (q) => q.queryKey[0] !== keys.auth[0] });
+    },
+  });
 }
 
 export const useTasks = (q: TaskQuery, enabled = true) =>

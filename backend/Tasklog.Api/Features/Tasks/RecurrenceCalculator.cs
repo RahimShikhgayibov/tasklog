@@ -1,4 +1,3 @@
-using Tasklog.Api.Common;
 using Tasklog.Api.Domain;
 
 namespace Tasklog.Api.Features.Tasks;
@@ -15,19 +14,19 @@ public static class RecurrenceCalculator
         if (rule == Recurrence.None)
             throw new ArgumentException("Task is not recurring.", nameof(rule));
 
-        var baseUtc = currentDueUtc ?? nowUtc;
-        var local = TimeZoneInfo.ConvertTimeFromUtc(DateTime.SpecifyKind(baseUtc, DateTimeKind.Utc), tz);
-        var today = TimeZoneResolver.LocalDate(nowUtc, tz);
+        var nowLocal = ToLocal(nowUtc, tz);
+        var next = Step(currentDueUtc is { } due ? ToLocal(due, tz) : nowLocal, rule);
 
-        var next = Step(local, rule);
-
-        // Completing an overdue habit late should not create another overdue
-        // occurrence: move forward until the next one is today or later.
-        while (DateOnly.FromDateTime(next) < today)
+        // Completing an overdue task late must not create an occurrence that is
+        // already overdue: skip forward to the first one still in the future.
+        while (next <= nowLocal)
             next = Step(next, rule);
 
         return TimeZoneInfo.ConvertTimeToUtc(DateTime.SpecifyKind(next, DateTimeKind.Unspecified), tz);
     }
+
+    private static DateTime ToLocal(DateTime utc, TimeZoneInfo tz) =>
+        TimeZoneInfo.ConvertTimeFromUtc(DateTime.SpecifyKind(utc, DateTimeKind.Utc), tz);
 
     private static DateTime Step(DateTime local, Recurrence rule) => rule switch
     {

@@ -1,3 +1,4 @@
 <Solution>
   <Project Path="backend/Tasklog.Api/Tasklog.Api.csproj" />
+  <Project Path="backend/Tasklog.Api.Tests/Tasklog.Api.Tests.csproj" />
 </Solution>

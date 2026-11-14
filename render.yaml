@@ -1,0 +1,19 @@
+# Render Blueprint: Dashboard → New → Blueprint → pick this repo.
+# Render asks for the two secret values below once, while creating the service.
+services:
+  - type: web
+    name: tasklog
+    runtime: docker
+    plan: free
+    region: frankfurt
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    healthCheckPath: /health
+    autoDeployTrigger: commit
+    envVars:
+      # Neon connection string (postgresql://… URL is fine; use the non-pooled one)
+      - key: ConnectionStrings__Default
+        sync: false
+      # Login password, at least 10 characters
+      - key: Auth__Password
+        sync: false

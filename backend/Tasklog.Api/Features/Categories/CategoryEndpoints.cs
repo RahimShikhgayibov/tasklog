@@ -44,7 +44,7 @@ public static partial class CategoryEndpoints
 
         categories.MapPut("/{id:guid}", async (Guid id, SaveCategoryRequest req, AppDbContext db, CancellationToken ct) =>
         {
-            var category = await db.Categories.FindAsync([id], ct);
+            var category = await db.Categories.FindAsync(new object[] { id }, ct);
             if (category is null) return Results.NotFound();
 
             var validation = await Validate(req, id, db, ct);
@@ -61,7 +61,7 @@ public static partial class CategoryEndpoints
         // (ON DELETE SET NULL in the database).
         categories.MapDelete("/{id:guid}", async (Guid id, AppDbContext db, CancellationToken ct) =>
         {
-            var category = await db.Categories.FindAsync([id], ct);
+            var category = await db.Categories.FindAsync(new object[] { id }, ct);
             if (category is null) return Results.NotFound();
 
             db.Categories.Remove(category);

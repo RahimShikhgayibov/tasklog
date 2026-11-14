@@ -51,6 +51,7 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
     } catch {
       /* not JSON */
     }
+    if (res.status === 429) message = "Çox cəhd oldu. Bir dəqiqə gözlə və yenidən yoxla.";
     throw new ApiError(res.status, message, fieldErrors);
   }
 
@@ -82,6 +83,21 @@ export interface TaskQuery {
 }
 
 export const api = {
+  auth: {
+    /** true = logged in; false = the server answered 401. */
+    me: async () => {
+      try {
+        await request<{ authenticated: boolean }>("/auth/me");
+        return true;
+      } catch (e) {
+        if (e instanceof ApiError && e.status === 401) return false;
+        throw e;
+      }
+    },
+    login: (password: string) => request<{ authenticated: boolean }>("/auth/login", { method: "POST", body: json({ password }) }),
+    logout: () => request<void>("/auth/logout", { method: "POST" }),
+  },
+
   tasks: {
     list: (q: TaskQuery) => request<Task[]>(`/tasks${qs({ ...q })}`),
     counts: (todayEnd: string) => request<TaskCounts>(`/tasks/counts${qs({ todayEnd })}`),

@@ -1,10 +1,17 @@
+using Microsoft.AspNetCore.DataProtection.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
+using Microsoft.EntityFrameworkCore.Design;
 using Tasklog.Api.Domain;
 
 namespace Tasklog.Api.Data;
 
-public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(options)
+/// <remarks>
+/// PostgreSQL. Every DateTime is UTC and stored as "timestamp with time zone";
+/// Npgsql refuses to write a DateTime whose Kind isn't Utc, which catches any
+/// accidental local time early.
+/// </remarks>
+public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
+    : DbContext(options), IDataProtectionKeyContext
 {
     public DbSet<TaskItem> Tasks => Set<TaskItem>();
     public DbSet<SubTask> SubTasks => Set<SubTask>();
@@ -12,15 +19,11 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
     public DbSet<ActivityEntry> ActivityEntries => Set<ActivityEntry>();
     public DbSet<JournalEntry> JournalEntries => Set<JournalEntry>();
 
-    protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
-    {
-        // SQLite has no real datetime type and returns DateTimeKind.Unspecified.
-        // Every DateTime in this app is UTC, so mark it as such on the way out;
-        // otherwise JSON would be serialized without "Z" and the browser would
-        // read it as local time.
-        configurationBuilder.Properties<DateTime>().HaveConversion<UtcDateTimeConverter>();
-        configurationBuilder.Properties<DateTime?>().HaveConversion<NullableUtcDateTimeConverter>();
-    }
+    /// <summary>
+    /// ASP.NET Core's cookie-encryption keys. Kept in the database so a login
+    /// survives restarts: the free cloud instance restarts every time it wakes up.
+    /// </summary>
+    public DbSet<DataProtectionKey> DataProtectionKeys => Set<DataProtectionKey>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -80,10 +83,14 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
     }
 }
 
-public sealed class UtcDateTimeConverter() : ValueConverter<DateTime, DateTime>(
-    v => v.Kind == DateTimeKind.Utc ? v : v.ToUniversalTime(),
-    v => DateTime.SpecifyKind(v, DateTimeKind.Utc));
-
-public sealed class NullableUtcDateTimeConverter() : ValueConverter<DateTime?, DateTime?>(
-    v => v.HasValue ? (v.Value.Kind == DateTimeKind.Utc ? v.Value : v.Value.ToUniversalTime()) : v,
-    v => v.HasValue ? DateTime.SpecifyKind(v.Value, DateTimeKind.Utc) : v);
+/// <summary>
+/// Used only by "dotnet ef migrations …": builds the model without starting
+/// the app, so no real database or password is needed to create a migration.
+/// </summary>
+public sealed class DesignTimeDbContextFactory : IDesignTimeDbContextFactory<AppDbContext>
+{
+    public AppDbContext CreateDbContext(string[] args) =>
+        new(new DbContextOptionsBuilder<AppDbContext>()
+            .UseNpgsql("Host=localhost;Database=tasklog_design")
+            .Options);
+}

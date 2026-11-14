@@ -1,0 +1,33 @@
+# Local development.
+#   docker compose up -d db        → only PostgreSQL (then: dotnet run + npm run dev)
+#   docker compose up --build      → the whole app at http://localhost:8080 (password: local-password)
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: tasklog
+      POSTGRES_PASSWORD: tasklog
+      POSTGRES_DB: tasklog
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tasklog"]
+      interval: 5s
+      retries: 10
+
+  app:
+    build: .
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ConnectionStrings__Default: Host=db;Port=5432;Database=tasklog;Username=tasklog;Password=tasklog
+      Auth__Password: local-password
+    ports:
+      - "8080:8080"
+
+volumes:
+  pgdata:

@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from "react";
 import { NavLink } from "react-router";
-import { useCategories, useCategoryMutations, useTaskCounts } from "../api/hooks";
+import { useCategories, useCategoryMutations, useLogout, useTaskCounts } from "../api/hooks";
 import { todayRange } from "../lib/dates";
 import {
   CalendarIcon,
@@ -9,6 +9,7 @@ import {
   CheckIcon,
   HistoryIcon,
   InboxIcon,
+  LogoutIcon,
   PlusIcon,
   SunIcon,
 } from "./Icons";
@@ -21,6 +22,7 @@ export function Sidebar() {
   const todayEnd = todayRange().end.toISOString();
   const { data: counts } = useTaskCounts(todayEnd);
   const { data: categories = [] } = useCategories();
+  const logout = useLogout();
 
   return (
     <nav className="sidebar" aria-label="Əsas menyu">
@@ -75,6 +77,13 @@ export function Sidebar() {
           <ChartIcon />
           <span className="nav-label">Statistika</span>
         </NavLink>
+      </div>
+
+      <div className="nav-group nav-bottom">
+        <button type="button" className="nav-link nav-button logout" onClick={() => logout.mutate()}>
+          <LogoutIcon />
+          <span className="nav-label">Çıxış</span>
+        </button>
       </div>
     </nav>
   );
